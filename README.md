@@ -46,8 +46,8 @@ f1_pitstop_optimizer/
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/f1_pitstop_optimizer.git
-cd f1_pitstop_optimizer
+git clone https://github.com/0xTobix0/F1-pitstop-analysis.git
+cd F1-pitstop-analysis
 ```
 
 2. Install dependencies:
@@ -59,13 +59,13 @@ pip install -r requirements.txt
 
 Run the strategy test script:
 ```bash
-python notebooks/04_strategy_test.py
+python test_points_strategy.py
 ```
 
 The script will:
-1. Load real-time F1 data using FastF1
+1. Load historical F1 data (2018-2025) using FastF1
 2. Analyze track conditions and tire performance
-3. Generate optimized pit stop strategies
+3. Generate points-optimized pit stop strategies
 4. Provide detailed strategy recommendations considering:
    - Weather conditions
    - Track evolution
@@ -103,10 +103,11 @@ Strategy Notes:
 
 ## Dependencies
 
-- FastF1: Real-time F1 telemetry data
-- Pandas: Data manipulation and analysis
-- NumPy: Numerical computations
-- Logging: Error handling and process tracking
+- FastF1 (>=3.0.0): Real-time F1 telemetry data
+- Pandas (>=1.2.4): Data manipulation and analysis
+- NumPy (>=1.19.2): Numerical computations
+- Matplotlib (>=3.3.4): Data visualization
+- Seaborn (>=0.11.1): Statistical visualizations
 
 ## Contributing
 
