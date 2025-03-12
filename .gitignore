@@ -42,6 +42,12 @@ env/
 *.db
 *.sqlite3
 
+# Cache and backup
+cache/
+cache_backup/
+backup_images/
+fastf1_http_cache.sqlite
+
 # OS
 .DS_Store
 .DS_Store?
