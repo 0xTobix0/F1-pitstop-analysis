@@ -595,29 +595,56 @@ class TrackStrategyOptimizer:
             
             # Track name aliases
             TRACK_ALIASES = {
-                'spa': 'belgian_gp',
-                'monza': 'italian_gp',
-                'silverstone': 'british_gp',
-                'melbourne': 'australian_gp',
-                'shanghai': 'chinese_gp',
-                'suzuka': 'japanese_gp',
-                'sakhir': 'bahrain_gp',
-                'jeddah': 'saudi_arabia_gp',
+                'australian': 'australian_gp',
+                'australia': 'australian_gp',
+                'chinese': 'chinese_gp',
+                'china': 'chinese_gp',
+                'japanese': 'japanese_gp',
+                'japan': 'japanese_gp',
+                'bahrain': 'bahrain_gp',
+                'saudi': 'saudi_arabia_gp',
+                'saudi arabia': 'saudi_arabia_gp',
+                'miami': 'miami_gp',
+                'emilia': 'emilia_romagna_gp',
                 'imola': 'emilia_romagna_gp',
+                'monaco': 'monaco_gp',
                 'monte carlo': 'monaco_gp',
-                'catalunya': 'spanish_gp',
-                'montreal': 'canadian_gp',
-                'spielberg': 'austrian_gp',
-                'hungaroring': 'hungarian_gp',
+                'spanish': 'spanish_gp',
+                'spain': 'spanish_gp',
+                'canadian': 'canadian_gp',
+                'canada': 'canadian_gp',
+                'austrian': 'austrian_gp',
+                'austria': 'austrian_gp',
+                'british': 'british_gp',
+                'britain': 'british_gp',
+                'silverstone': 'british_gp',
+                'belgian': 'belgian_gp',
+                'belgium': 'belgian_gp',
+                'spa': 'belgian_gp',
+                'hungarian': 'hungarian_gp',
+                'hungary': 'hungarian_gp',
+                'dutch': 'dutch_gp',
+                'netherlands': 'dutch_gp',
                 'zandvoort': 'dutch_gp',
+                'italian': 'italian_gp',
+                'italy': 'italian_gp',
+                'monza': 'italian_gp',
+                'azerbaijan': 'azerbaijan_gp',
                 'baku': 'azerbaijan_gp',
+                'singapore': 'singapore_gp',
                 'marina bay': 'singapore_gp',
+                'united states': 'united_states_gp',
+                'usa': 'united_states_gp',
                 'cota': 'united_states_gp',
-                'austin': 'united_states_gp',
-                'mexico city': 'mexican_gp',
+                'mexican': 'mexican_gp',
+                'mexico': 'mexican_gp',
+                'brazilian': 'brazilian_gp',
+                'brazil': 'brazilian_gp',
                 'interlagos': 'brazilian_gp',
-                'sao paulo': 'brazilian_gp',
-                'lusail': 'qatar_gp',
+                'las vegas': 'las_vegas_gp',
+                'qatar': 'qatar_gp',
+                'losail': 'qatar_gp',
+                'abu dhabi': 'abu_dhabi_gp',
                 'yas marina': 'abu_dhabi_gp'
             }
             
@@ -711,26 +738,7 @@ class TrackStrategyOptimizer:
                     previous_stops=previous_stops
                 )
                 
-                print("\nRecommended Strategy:")
-                print("-" * 40)
-                print(f"Current Tires: {current_compound.title()} ({tire_age} laps old)")
-                print(f"Pit Stops Made: {num_stops}")
-                if previous_stops:
-                    print("Previous Stops:", ", ".join(f"Lap {lap}" for lap in previous_stops))
-                print(f"\nOptimal Number of Remaining Stops: {strategy['recommended_stops']}")
-                print()
-                
-                for i, window in enumerate(strategy['pit_windows'], 1):
-                    print(f"Stop {i} of {strategy['recommended_stops']}:")
-                    print(f"- Window: Lap {window['start_lap']} - {window['end_lap']}")
-                    print(f"- Optimal Lap: {window['optimal_lap']}")
-                    print(f"- Compound: {window['compound']}")
-                    print()
-                
-                print("Key Strategy Points:")
-                for note in strategy['strategy_notes']:
-                    print(f"- {note}")
-                print()
+                optimizer.display_strategy(strategy)
                 
             except ValueError as e:
                 print(f"\nError: {e}")
@@ -803,16 +811,22 @@ class TrackStrategyOptimizer:
         
         # Generate strategy notes
         strategy_notes = self._generate_strategy_notes(
-            current_position=current_position,
-            stop_windows=stop_windows,
+            position=current_position,
+            current_lap=current_lap,
             current_compound=current_compound,
-            tire_age=tire_age
+            tire_age=tire_age,
+            pit_stops_made=stops_made,
+            pit_stop_laps=previous_stops
         )
         
         return {
             'recommended_stops': recommended_stops,
             'pit_windows': stop_windows,
-            'strategy_notes': strategy_notes
+            'strategy_notes': strategy_notes,
+            'current_compound': current_compound,
+            'tire_age': tire_age,
+            'pit_stops_made': stops_made,
+            'previous_stops': previous_stops
         }
         
     def _calculate_optimal_stops(
@@ -858,187 +872,112 @@ class TrackStrategyOptimizer:
         tire_age: int
     ) -> List[Dict]:
         """Calculate optimal pit stop windows."""
-        stop_windows = []
+        if base_stops == 0:
+            return []
+            
+        windows = []
         remaining = remaining_laps
         
+        # Simple stint calculation - divide remaining laps evenly
+        stint_length = remaining // (base_stops + 1)
+        
         for stop in range(base_stops):
-            # Calculate optimal stint length for this stop
-            if stop == base_stops - 1:
-                # Last stint - use all remaining laps
-                stint_length = remaining
-            else:
-                # Earlier stints - distribute remaining laps
-                base_stint = remaining / (base_stops - stop)
-                
-                # Adjust stint length based on track characteristics
-                if self.track_characteristics.track_type == 'high_speed':
-                    # Shorter stints for high-speed tracks due to higher wear
-                    base_stint *= 0.95
-                elif self.track_characteristics.track_type == 'street':
-                    # Longer stints possible on street circuits
-                    base_stint *= 1.05
-                
-                # Further adjust for high degradation
-                if self.track_characteristics.high_degradation:
-                    base_stint *= 0.95
-                
-                stint_length = base_stint
+            # Calculate optimal lap - never pit in last 2 laps
+            optimal_lap = min(
+                self.track_characteristics.race_laps - 2,
+                current_lap + stint_length
+            )
             
-            # Calculate window margins
-            margin = self.track_characteristics.pit_window_margin
-            if self.track_characteristics.difficult_overtaking:
-                margin = max(2, margin - 1)  
-            elif self.track_characteristics.track_type == 'high_speed':
-                margin = min(6, margin + 1)  
+            # Simple window margin based on track type
+            margin = 3 if self.track_characteristics.track_type == 'street' else 5
             
-            # Create window
             window = {
-                'start_lap': max(current_lap, round(current_lap + stint_length - margin)),
-                'optimal_lap': round(current_lap + stint_length),
-                'end_lap': min(
-                    self.track_characteristics.race_laps - 1,
-                    round(current_lap + stint_length + margin)
-                ),
-                'compound': self._recommend_compound(stop, base_stops, remaining, current_compound)
+                'stop_number': stop + 1,
+                'window': {
+                    'start': max(current_lap, optimal_lap - margin),
+                    'optimal': optimal_lap,
+                    'end': min(
+                        self.track_characteristics.race_laps - 2,
+                        optimal_lap + margin
+                    )
+                },
+                'compound': self._recommend_compound(stop, base_stops, remaining)
             }
             
-            stop_windows.append(window)
-            current_lap = window['optimal_lap']
+            windows.append(window)
+            current_lap = optimal_lap
             remaining = self.track_characteristics.race_laps - current_lap
-        
-        return stop_windows
+            stint_length = remaining // (base_stops - stop) if stop < base_stops - 1 else remaining
+            
+        return windows
     
-    def _recommend_compound(self, stop_number: int, num_stops: int, remaining_laps: int, current_compound: str = None) -> str:
-        """Recommend tire compound based on strategy and remaining laps."""
-        available_compounds = self.track_characteristics.tire_compounds
-        compounds_data = self.TIRE_COMPOUNDS
+    def _recommend_compound(self, stop: int, total_stops: int, remaining_laps: int) -> str:
+        """Recommend tire compound."""
+        # For last stint
+        if stop == total_stops - 1:
+            # Use softs for short final stints or street circuits
+            if remaining_laps <= 15 or self.track_characteristics.track_type == 'street':
+                return 'soft'
+            return 'medium'
         
-        # Filter out current compound if it's worn
-        if current_compound and current_compound in available_compounds:
-            compound_data = compounds_data[current_compound]
-            if compound_data.get('remaining_life', compound_data['max_life']) < 10:
-                available_compounds = [c for c in available_compounds if c != current_compound]
-        
-        # No valid compounds available
-        if not available_compounds:
-            return 'medium'  # Default to medium if no other options
-        
-        # Single compound available
-        if len(available_compounds) == 1:
-            return available_compounds[0]
-        
-        # Calculate race phase (start: 0-0.3, middle: 0.3-0.7, end: 0.7-1.0)
-        race_progress = 1 - (remaining_laps / self.track_characteristics.race_laps)
-        
-        if race_progress < 0.3:
-            phase = 'start'
-        elif race_progress < 0.7:
-            phase = 'middle'
-        else:
-            phase = 'end'
-        
-        # Filter compounds by phase preference
-        phase_compounds = [
-            c for c in available_compounds
-            if compounds_data[c]['preferred_phase'] in [phase, 'any']
-        ]
-        
-        if phase_compounds:
-            available_compounds = phase_compounds
-        
-        # Consider track-specific high degradation
-        high_deg_compounds = [
-            c for c in available_compounds
-            if self.track_name in compounds_data[c]['high_deg_tracks']
-        ]
-        
-        if high_deg_compounds and race_progress > 0.7:
-            # Avoid high degradation compounds near the end
-            available_compounds = [
-                c for c in available_compounds
-                if c not in high_deg_compounds
-            ]
-        
-        # Sort by optimal window
-        viable_compounds = []
-        for compound in available_compounds:
-            window_start, window_end = compounds_data[compound]['optimal_window']
-            if window_start <= remaining_laps <= window_end:
-                viable_compounds.append(compound)
-        
-        if viable_compounds:
-            # Pick middle compound by pace advantage
-            return sorted(
-                viable_compounds,
-                key=lambda c: compounds_data[c]['pace_advantage']
-            )[len(viable_compounds)//2]
-        
-        # Default to hardest available compound
-        return sorted(
-            available_compounds,
-            key=lambda c: compounds_data[c]['max_life']
-        )[-1]
+        # For early stints, use harder compounds
+        return 'hard'
     
     def _generate_strategy_notes(
         self,
-        current_position: int,
-        stop_windows: List[Dict],
+        position: int,
+        current_lap: int,
         current_compound: str,
-        tire_age: int
-    ) -> List[str]:
-        """Generate strategy notes."""
-        strategy_notes = []
+        tire_age: int,
+        pit_stops_made: int,
+        pit_stop_laps: List[int]
+    ) -> str:
+        """Generate strategy notes based on race situation."""
+        notes = []
         
-        # Add position-based strategy
-        if current_position <= 3:
-            strategy_notes.append("Priority: Maintain track position")
-            if self.track_characteristics.track_type == 'high_speed':
-                strategy_notes.append("Use DRS to defend and manage gap")
-        elif current_position <= 10:
-            strategy_notes.append("Priority: Look for undercut opportunities")
-            if not self.track_characteristics.difficult_overtaking:
-                strategy_notes.append("Be aggressive in overtaking zones")
-        else:
-            strategy_notes.append("Priority: Consider alternate strategy")
-            if self.track_characteristics.high_safety_car:
-                strategy_notes.append("Stay out longer - potential safety car advantage")
+        # Basic strategy points
+        if self.track_characteristics.track_type == 'street':
+            notes.append("Track position is crucial")
+        elif self.track_characteristics.track_type == 'high_speed':
+            notes.append("Look for undercut opportunities")
+            notes.append("Be aggressive in overtaking zones")
+            
+        # Tire management
+        if self.track_characteristics.track_type in ['high_speed', 'technical']:
+            notes.append("Manage tires in high-load corners")
+            
+        # Safety car
+        if self.track_characteristics.safety_car_probability >= 0.4:
+            notes.append("Keep gaps under 20s for safety car")
+            
+        return "\n".join(f"- {note}" for note in notes) if notes else ""
+    
+    def display_strategy(self, strategy: Dict) -> None:
+        """Display the recommended strategy."""
+        print("\nRecommended Strategy:")
+        print("----------------------------------------")
+        print(f"Current Tires: {strategy['current_compound'].title()} ({strategy['tire_age']} laps old)")
+        print(f"Pit Stops Made: {strategy['pit_stops_made']}")
         
-        # Add key track-specific notes
-        if self.track_name == 'japanese_gp':
-            strategy_notes.extend([
-                "Key overtaking: Spoon Curve and 130R",
-                "Critical sectors: Sectors 1 and 2",
-                "Monitor weather - high variability"
-            ])
-        elif self.track_name == 'bahrain_gp':
-            strategy_notes.extend([
-                "Key overtaking: Turn 1 and Turn 4",
-                "Watch brake temperatures",
-                "Use slipstream on straights"
-            ])
-        elif self.track_name == 'monaco_gp':
-            strategy_notes.extend([
-                "Track position is everything",
-                "Undercut is very powerful",
-                "Key sector: Casino to Tunnel"
-            ])
+        if strategy['previous_stops']:
+            stops = ', '.join(f"Lap {lap}" for lap in strategy['previous_stops'])
+            print(f"Previous Stops: {stops}")
+        print()
         
-        # Add tire management note if needed
-        if self.track_characteristics.high_degradation:
-            strategy_notes.append("Manage tires in high-load corners")
+        print(f"Optimal Number of Remaining Stops: {strategy['recommended_stops']}")
+        print()
         
-        # Add safety car note if high probability
-        if self.track_characteristics.high_safety_car:
-            strategy_notes.append("Keep gaps under 20s for safety car")
+        for window in strategy['pit_windows']:
+            print(f"Stop {window['stop_number']} of {strategy['recommended_stops']}:")
+            print(f"- Window: Lap {window['window']['start']} - {window['window']['end']}")
+            print(f"- Optimal Lap: {window['window']['optimal']}")
+            print(f"- Compound: {window['compound']}")
+            print()
         
-        # Add current tire status note
-        if current_compound and tire_age:
-            compound_data = self.TIRE_COMPOUNDS[current_compound]
-            remaining_life = compound_data['max_life'] - tire_age
-            if remaining_life < 10:
-                strategy_notes.append(f"Current tires ({current_compound}) are worn out ({tire_age} laps old)")
-        
-        return strategy_notes
-
+        if strategy['strategy_notes']:
+            print("Key Strategy Points:")
+            print(strategy['strategy_notes'])
+            print()
+    
 if __name__ == "__main__":
     TrackStrategyOptimizer.get_track_details()
