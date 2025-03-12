@@ -1,49 +1,74 @@
 # F1 Pit Stop Strategy Optimizer
 
-A Python tool for optimizing Formula 1 pit stop strategies based on track characteristics, tire compounds, and race conditions.
+A Python tool for optimizing Formula 1 pit stop strategies using track characteristics, tire compounds, and FastF1 data integration.
 
 ## Features
 
-- Track-specific strategy generation considering:
-  - Tire degradation rates (ranging from 0.8x to 1.28x base rate)
-  - Track evolution (0.003 to 0.017 per lap)
-  - Safety car probabilities (20% to 65%)
-  - Overtaking difficulty (based on track type)
-  - Traffic impact (0.4 to 0.8 factor)
+### Track Analysis
+- Comprehensive track data for all F1 circuits:
+  - Track length and type (Street, Technical, High Speed, Standard)
+  - Race distance and lap count
+  - Pit loss time (20.5s - 23.5s)
+  - Overtaking difficulty factors
+
+### Strategy Calculation
+- Pit stop optimization considering:
+  - Tire degradation (0.8x - 1.28x base rate)
+  - Track evolution (0.003 - 0.017 per lap)
+  - Safety car probabilities (20% - 65%)
+  - Traffic impact (0.4 - 0.8 factor)
+
+### Tire Management
+- Compound-specific strategies:
+  - Performance vs. longevity trade-offs
+  - Track-specific recommendations
+  - Position-based adjustments
+  - Real-time wear analysis
+
+### FastF1 Integration
+- Live data integration for:
+  - Current season (2024)
+  - Key reference races (2023)
   - Weather conditions
+  - Track status
 
-- Tire compound optimization based on:
-  - Compound lifespan
-  - Performance advantage
-  - Track characteristics
-  - Race position
-  - Real-time degradation data
-
-- Real-time data integration using FastF1:
-  - Live tire wear analysis
-  - Weather impact assessment
-  - Track evolution tracking
-  - Safety car probability adjustment
-
-- Track Types and Characteristics:
-  - Standard (e.g., Australian GP, Austrian GP)
-  - Technical (e.g., Japanese GP, Spanish GP)
-  - High Speed (e.g., Belgian GP, Italian GP)
-  - Street (e.g., Monaco GP, Singapore GP)
-
-## Project Structure
+## Code Structure
 
 ```
 f1_pitstop_optimizer/
 ├── src/
 │   └── models/
 │       ├── __init__.py
-│       ├── track_strategy.py    # Main strategy optimization logic
-│       └── fastf1_loader.py     # Real-time race data integration
-├── cache/                       # FastF1 data cache
-│   └── ...                     # Race data cache files
-└── requirements.txt            # Project dependencies
+│       └── track_strategy.py    # Core strategy logic
+│           ├── TrackCharacteristics  # Track parameters
+│           ├── StopWindow           # Pit window data
+│           └── TrackStrategyOptimizer # Main optimizer
+├── cache/                      # FastF1 data cache
+│   ├── 2024/                  # Current season
+│   └── 2023/                  # Reference races
+└── requirements.txt           # Dependencies
 ```
+
+### Core Components
+
+#### TrackCharacteristics
+- Manages track-specific parameters:
+  - Base characteristics (length, type)
+  - Dynamic factors (degradation, evolution)
+  - Race conditions (safety car, traffic)
+
+#### StopWindow
+- Defines pit stop opportunities:
+  - Start/end lap ranges
+  - Optimal pit lap
+  - Compound recommendations
+
+#### TrackStrategyOptimizer
+- Handles strategy calculations:
+  - Track configuration loading
+  - Real-time data integration
+  - Stop timing optimization
+  - Compound selection
 
 ## Installation
 
@@ -60,65 +85,40 @@ pip install -r requirements.txt
 
 ## Usage
 
-Run the strategy optimizer:
+Run the optimizer:
 ```bash
 python -m src.models.track_strategy
 ```
 
-The tool will:
-1. Display available F1 tracks with:
-   - Track name
-   - Number of laps
-   - Track length
-   - Track type
+### Input Parameters
 
-2. Accept track input by:
+1. Track Selection:
    - Full name (e.g., "Monaco Grand Prix")
-   - Common name (e.g., "monaco", "spa", "monza")
+   - Common name (e.g., "monaco", "spa")
    - Track key (e.g., "monaco_gp")
 
-3. Show track characteristics:
-   - Basic info (length, type, pit loss time)
-   - Tire degradation factor
-   - Track evolution rate
-   - Safety car probability
-   - Traffic impact
-   - Overtaking difficulty
-   - Pit window margins
+2. Race Situation:
+   - Current position (1-20)
+   - Current lap number
+   - Tire compound and age
+   - Previous pit stop history
 
-4. Take race inputs:
-   - Current position
-   - Current lap
-   - Tire compound
-   - Tire age
-   - Previous pit stops
+### Output Information
 
-5. Generate optimized strategy:
-   - Recommended number of stops
-   - Pit windows with optimal laps
-   - Compound recommendations
+1. Track Configuration:
+   - Basic parameters (length, type)
+   - Dynamic characteristics
+   - Current conditions
+
+2. Strategy Recommendations:
+   - Optimal pit stop count
+   - Detailed pit windows
+   - Compound choices
    - Key strategy points
-
-## Dependencies
-
-- Python 3.8+
-- NumPy >= 1.24.0
-- FastF1 >= 3.0.0
-- Pandas >= 2.0.0
 
 ## Example Output
 
 ```
-Available F1 Tracks:
------------------------------------------------------------------
-Track                               Laps   Length   Type
------------------------------------------------------------------
-Australian Grand Prix               58     5.278    Standard
-Chinese Grand Prix                  56     5.451    Technical
-Japanese Grand Prix                 53     5.807    Technical
-Bahrain Grand Prix                 57     5.412    Standard
-...
-
 Monaco Grand Prix Configuration:
 ----------------------------------------
 Track Length: 3.337 km
@@ -133,20 +133,6 @@ Track Characteristics:
 - Traffic Impact: 0.80
 - Overtaking Difficulty: 0.80
 - Pit Window Margin: 2 laps
-
-Enter Race Details:
---------------------
-Current position: 1
-Current lap: 5
-
-Current Tire Details:
---------------------
-Current tire compound (soft/medium/hard/inter/wet): medium
-Current tire age (laps): 5
-
-Previous Pit Stops:
---------------------
-Number of pit stops made (0-3): 0
 
 Recommended Strategy:
 ----------------------------------------
@@ -167,6 +153,13 @@ Key Strategy Points:
 - Key sector: Casino to Tunnel
 - Keep gaps under 20s for safety car
 ```
+
+## Dependencies
+
+- Python 3.8+
+- FastF1 >= 3.0.0
+- NumPy >= 1.24.0
+- Pandas >= 2.0.0
 
 ## Contributing
 
