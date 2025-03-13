@@ -119,38 +119,36 @@ python -m src.models.track_strategy
 ## Example Output
 
 ```
-Monaco Grand Prix Configuration:
+Dutch Grand Prix Configuration:
 ----------------------------------------
-Track Length: 3.337 km
-Track Type: Street
-Maximum Pit Stops: 1
-Pit Loss Time: 23.5 seconds
+Track Length: 4.259 km
+Track Type: Technical
+Maximum Pit Stops: 2
+Pit Loss Time: 22.0 seconds
 
 Track Characteristics:
-- Tire Degradation: 0.80x
-- Track Evolution: 0.003
-- Safety Car Probability: 60.00%
-- Traffic Impact: 0.80
+- Tire Degradation: 1.25x
+- Track Evolution: 0.013
+- Safety Car Probability: 40.00%
+- Traffic Impact: 0.70
 - Overtaking Difficulty: 0.80
-- Pit Window Margin: 2 laps
+- Pit Window Margin: 4 laps
 
 Recommended Strategy:
 ----------------------------------------
 Current Tires: Medium (5 laps old)
-Pit Stops Made: 0
+Pit Stops Made: 1
+Previous Stops: Lap 20
 
 Optimal Number of Remaining Stops: 1
 
 Stop 1 of 1:
-- Window: Lap 76 - 77
-- Optimal Lap: 78
-- Compound: hard
+- Window: Lap 43 - 53
+- Optimal Lap: 48
+- Compound: medium
 
 Key Strategy Points:
-- Priority: Maintain track position
-- Track position is everything
-- Undercut is very powerful
-- Key sector: Casino to Tunnel
+- Manage tires in high-load corners
 - Keep gaps under 20s for safety car
 ```
 
