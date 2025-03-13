@@ -1,4 +1,16 @@
-"""Track strategy optimizer module."""
+"""
+F1 Pit Stop Strategy Optimizer
+
+This module provides a comprehensive pit stop strategy optimization system for Formula 1 races.
+It uses track characteristics, tire data, and real-time race information to calculate optimal
+pit stop windows and tire compound recommendations.
+
+Key Components:
+- TrackCharacteristics: Manages track-specific parameters and conditions
+- StopWindow: Defines pit stop timing and compound recommendations
+- TrackStrategyOptimizer: Core strategy calculation engine
+"""
+
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 import numpy as np
@@ -6,53 +18,95 @@ from src.models.fastf1_loader import FastF1DataLoader
 
 @dataclass
 class TrackCharacteristics:
-    """Track characteristics data class."""
-    tire_degradation: float = 1.0  
-    track_evolution: float = 0.005  
-    safety_car_probability: float = 0.3  
-    traffic_impact: float = 0.5  
-    pit_window_margin: int = 3  
-    overtaking_difficulty: float = 0.5  
-    track_length: float = 5.0  
-    track_type: str = 'standard'  
-    pit_loss_time: float = 20.0  
-    race_laps: int = 0  
-    max_stops: int = 3  
+    """
+    Track characteristics and conditions that influence pit stop strategy.
+    
+    Attributes:
+        tire_degradation (float): Base tire wear rate (1.0 = normal, >1.0 = higher wear)
+        track_evolution (float): How quickly track grip improves (0.003-0.017 per lap)
+        safety_car_probability (float): Likelihood of safety car appearance (0.2-0.65)
+        traffic_impact (float): Effect of traffic on lap times (0.4-0.8)
+        pit_window_margin (int): Flexible laps around optimal pit window
+        overtaking_difficulty (float): How hard it is to pass (0.4-0.8)
+        track_length (float): Circuit length in kilometers
+        track_type (str): Circuit category (street/technical/high-speed/standard)
+        pit_loss_time (float): Time lost for pit stop in seconds
+        race_laps (int): Total number of race laps
+        max_stops (int): Maximum recommended pit stops
+    """
+    tire_degradation: float = 1.0
+    track_evolution: float = 0.005
+    safety_car_probability: float = 0.3
+    traffic_impact: float = 0.5
+    pit_window_margin: int = 3
+    overtaking_difficulty: float = 0.5
+    track_length: float = 5.0
+    track_type: str = 'standard'
+    pit_loss_time: float = 20.0
+    race_laps: int = 0
+    max_stops: int = 3
     
     def __post_init__(self):
-        self.tire_compounds = ['soft', 'medium', 'hard']  
+        """Initialize available tire compounds after instance creation."""
+        self.tire_compounds = ['soft', 'medium', 'hard']
     
     @property
     def high_degradation(self) -> bool:
-        """Check if track has high tire degradation."""
+        """Check if track has high tire degradation (>1.1x base rate)."""
         return self.tire_degradation > 1.1
 
     @property
     def high_evolution(self) -> bool:
-        """Check if track has high evolution."""
+        """Check if track has significant grip improvement (>0.008 per lap)."""
         return self.track_evolution > 0.008
 
     @property
     def high_safety_car(self) -> bool:
-        """Check if track has high safety car probability."""
+        """Check if track has high safety car risk (>35% probability)."""
         return self.safety_car_probability > 0.35
 
     @property
     def difficult_overtaking(self) -> bool:
-        """Check if track has difficult overtaking."""
+        """Check if track has limited overtaking opportunities (>0.7 difficulty)."""
         return self.overtaking_difficulty > 0.7
 
 @dataclass
 class StopWindow:
-    """Pit stop window data class."""
+    """
+    Defines a pit stop window with timing and compound recommendations.
+    
+    A pit stop window represents a range of laps where pitting would be optimal,
+    considering track position, tire wear, and race conditions.
+    
+    Attributes:
+        start_lap (int): Earliest recommended lap to pit
+        optimal_lap (int): Ideal lap for pit stop
+        end_lap (int): Latest recommended lap to pit
+        compound (str): Recommended tire compound for next stint
+    """
     start_lap: int = field(metadata={"description": "Start lap of the pit window"})
     optimal_lap: int = field(metadata={"description": "Optimal lap to pit"})
     end_lap: int = field(metadata={"description": "End lap of the pit window"})
     compound: str = field(metadata={"description": "Recommended tire compound"})
 
 class TrackStrategyOptimizer:
-    """Track strategy optimizer class."""
+    """
+    Core strategy optimization engine for F1 pit stops.
     
+    This class handles:
+    1. Track configuration management
+    2. Real-time data integration via FastF1
+    3. Pit stop window calculations
+    4. Tire compound recommendations
+    5. Strategy point generation
+    
+    The optimizer considers:
+    - Track characteristics (type, length, degradation)
+    - Race situation (position, lap, tire age)
+    - Historical data (previous races, weather patterns)
+    """
+    
+    # Track configurations with pre-defined characteristics
     TRACK_CONFIGS = {
         'australian_gp': {
             'track_length': 5.278,
@@ -419,19 +473,20 @@ class TrackStrategyOptimizer:
         'abu_dhabi_gp': 'Abu Dhabi Grand Prix'
     }
     
+    # Tire compound characteristics and performance data
     TIRE_COMPOUNDS = {
         'soft': {
-            'min_life': 10,
-            'max_life': 20,
-            'pace_advantage': 0.8,
-            'optimal_window': (0, 15),  # Best performance in first 15 laps
-            'high_deg_tracks': ['monaco_gp', 'singapore_gp'],  # Tracks where this compound degrades faster
-            'preferred_phase': 'end'  # Best used at end of race
+            'min_life': 10,  # Minimum expected laps before significant degradation
+            'max_life': 20,  # Maximum usable life in optimal conditions
+            'pace_advantage': -0.5,  # Pace delta vs medium compound (seconds)
+            'optimal_window': (1, 15),  # Best performance window (start_lap, end_lap)
+            'high_deg_tracks': ['singapore_gp', 'spanish_gp'],  # Tracks with high wear
+            'preferred_phase': 'early'  # Best race phase for this compound
         },
         'medium': {
             'min_life': 20,
             'max_life': 35,
-            'pace_advantage': 0.4,
+            'pace_advantage': 0.0,
             'optimal_window': (5, 25),  # Best performance between laps 5-25
             'high_deg_tracks': ['silverstone', 'suzuka'],
             'preferred_phase': 'middle'
@@ -462,6 +517,7 @@ class TrackStrategyOptimizer:
         }
     }
     
+    # Special weather-specific tire compounds
     WEATHER_COMPOUNDS = {
         'intermediate': {
             'color': 'Green',
@@ -478,7 +534,18 @@ class TrackStrategyOptimizer:
     }
     
     def __init__(self, track_name: str, year: int):
-        """Initialize with track name and year."""
+        """
+        Initialize the pit stop strategy optimizer.
+        
+        Args:
+            track_name (str): Name of the F1 track (e.g., 'monaco_gp')
+            year (int): Season year for historical data reference
+        
+        The initializer:
+        1. Loads track configuration from predefined settings
+        2. Attempts to fetch live session data via FastF1
+        3. Updates track characteristics based on real-time data
+        """
         self.track_name = track_name.lower()
         self.year = year
         self.track_characteristics = TrackCharacteristics()
@@ -499,7 +566,15 @@ class TrackStrategyOptimizer:
             print(f"\nNote: Using default track data (no live data available: {e})")
     
     def load_track_config(self):
-        """Load track configuration."""
+        """
+        Load and set track-specific configuration parameters.
+        
+        This method:
+        1. Retrieves track config from TRACK_CONFIGS dictionary
+        2. Sets basic track parameters (length, type, pit loss time)
+        3. Sets race parameters (laps, compounds, max stops)
+        4. Sets behavioral characteristics (degradation, evolution, safety car)
+        """
         config = self.TRACK_CONFIGS[self.track_name]
         
         # Basic track characteristics
@@ -519,7 +594,22 @@ class TrackStrategyOptimizer:
         self.track_characteristics.overtaking_difficulty = 0.8 if config['difficult_overtaking'] else 0.4
     
     def update_characteristics(self, tire_data: Dict, weather_data: Dict):
-        """Update track characteristics based on real data."""
+        """
+        Update track characteristics using real-time session data.
+        
+        Args:
+            tire_data (Dict): Real-time tire performance metrics
+                Keys: compound names
+                Values: degradation, avg life, fastest lap
+            weather_data (Dict): Current weather conditions
+                Keys: rainfall, track_temp, weather_stability
+        
+        This method dynamically adjusts:
+        1. Tire degradation based on real performance
+        2. Safety car probability based on conditions
+        3. Track evolution rate
+        4. Traffic impact factors
+        """
         if tire_data:
             # Update tire degradation based on real data
             compounds_deg = [
@@ -549,16 +639,16 @@ class TrackStrategyOptimizer:
                     })
         
         if weather_data:
-            # Update safety car probability
+            # Update safety car probability based on conditions
             base_probability = self.track_characteristics.safety_car_probability
             
-            # Weather impact
+            # Weather impact factors
             if weather_data.get('rainfall', False):
                 base_probability *= 1.5  # 50% higher in wet conditions
             if weather_data.get('track_temp', 25) > 40:
                 base_probability *= 1.2  # 20% higher in very hot conditions
             
-            # Track type impact
+            # Track type impact factors
             if self.track_characteristics.track_type == 'street':
                 base_probability *= 1.3  # 30% higher on street circuits
             elif self.track_characteristics.track_type == 'high_speed':
@@ -576,7 +666,21 @@ class TrackStrategyOptimizer:
     
     @staticmethod
     def get_track_details():
-        """Get and display details for a specific F1 track and generate pit stop strategy."""
+        """
+        Interactive CLI to display track information and generate strategies.
+        
+        Features:
+        1. Lists all available F1 tracks with key details
+        2. Supports multiple track name formats (full, short, common names)
+        3. Provides track-specific characteristics
+        4. Generates customized pit stop strategies
+        
+        Track Types:
+        - standard: Balanced characteristics
+        - technical: High downforce, slower corners
+        - high_speed: Long straights, fast corners
+        - street: Narrow, walls, high risk
+        """
         while True:
             print("\nAvailable F1 Tracks:")
             print("-" * 65)
@@ -752,14 +856,27 @@ class TrackStrategyOptimizer:
         tire_age: int = 0,
         previous_stops: List[int] = None
     ) -> Dict:
-        """Generate pit stop strategy.
+        """
+        Generate an optimal pit stop strategy based on current race conditions.
+        
+        This method analyzes multiple factors to determine the best strategy:
+        1. Track characteristics (degradation, evolution, traffic)
+        2. Current race situation (position, lap, tire condition)
+        3. Historical pit stop data
+        4. Weather and track conditions
         
         Args:
-            current_lap: Current lap number
-            current_position: Current race position
-            current_compound: Current tire compound
-            tire_age: Age of current tires in laps
-            previous_stops: List of lap numbers where previous stops were made
+            current_lap (int): Current lap number in the race
+            current_position (int): Current position (1-20)
+            current_compound (str, optional): Current tire compound (soft/medium/hard/inter/wet)
+            tire_age (int, optional): Age of current tires in laps
+            previous_stops (List[int], optional): Lap numbers of previous pit stops
+        
+        Returns:
+            Dict: Strategy recommendation containing:
+                - recommended_stops: Number of remaining pit stops
+                - pit_windows: List of StopWindow objects
+                - strategy_notes: List of important strategy considerations
         """
         if previous_stops is None:
             previous_stops = []
@@ -768,17 +885,17 @@ class TrackStrategyOptimizer:
         stops_made = len(previous_stops)
         max_remaining_stops = self.track_characteristics.max_stops - stops_made
         
-        # Get tire data
+        # Get tire data and update with current state
         compounds_data = self.TIRE_COMPOUNDS.copy()
         if current_compound:
-            # Update tire life expectancy based on current age
+            # Update tire life expectancy based on current age and wear
             compound_data = compounds_data[current_compound]
             remaining_life = compound_data['max_life'] - tire_age
             if remaining_life < 0:
                 remaining_life = 0
             compounds_data[current_compound]['remaining_life'] = remaining_life
         
-        # Calculate optimal number of remaining stops
+        # Early return if race is finished
         if remaining_laps <= 0:
             return {
                 'recommended_stops': 0,
@@ -786,57 +903,76 @@ class TrackStrategyOptimizer:
                 'strategy_notes': ['Race is finished']
             }
         
-        # Determine optimal number of stops based on:
-        # 1. Remaining laps
-        # 2. Current tire condition
-        # 3. Track characteristics
-        # 4. Previous pit stop pattern
+        # Calculate optimal strategy considering:
+        # 1. Remaining race distance
+        # 2. Current tire condition and compound
+        # 3. Track-specific characteristics
+        # 4. Historical pit stop patterns
         base_stops = self._calculate_optimal_stops(
             remaining_laps=remaining_laps,
             current_compound=current_compound,
             tire_age=tire_age,
-            previous_stops=previous_stops
+            track_evolution=self.track_characteristics.track_evolution,
+            safety_car_prob=self.track_characteristics.safety_car_probability
         )
         
-        recommended_stops = min(base_stops, max_remaining_stops)
+        # Adjust strategy based on race position and traffic
+        adjusted_stops = self._adjust_strategy_for_position(
+            base_stops=base_stops,
+            current_position=current_position,
+            traffic_impact=self.track_characteristics.traffic_impact,
+            overtaking_difficulty=self.track_characteristics.overtaking_difficulty
+        )
         
-        # Calculate stop windows
-        stop_windows = self._calculate_stop_windows(
-            current_lap=current_lap,
-            base_stops=recommended_stops,
+        # Generate pit windows for each remaining stop
+        pit_windows = self._generate_pit_windows(
             remaining_laps=remaining_laps,
+            num_stops=adjusted_stops,
             current_compound=current_compound,
             tire_age=tire_age
         )
         
-        # Generate strategy notes
+        # Add strategy notes based on specific conditions
         strategy_notes = self._generate_strategy_notes(
-            position=current_position,
-            current_lap=current_lap,
-            current_compound=current_compound,
-            tire_age=tire_age,
-            pit_stops_made=stops_made,
-            pit_stop_laps=previous_stops
+            pit_windows=pit_windows,
+            current_position=current_position,
+            safety_car_prob=self.track_characteristics.safety_car_probability,
+            track_evolution=self.track_characteristics.track_evolution
         )
         
         return {
-            'recommended_stops': recommended_stops,
-            'pit_windows': stop_windows,
-            'strategy_notes': strategy_notes,
-            'current_compound': current_compound,
-            'tire_age': tire_age,
-            'pit_stops_made': stops_made,
-            'previous_stops': previous_stops
+            'recommended_stops': adjusted_stops,
+            'pit_windows': pit_windows,
+            'strategy_notes': strategy_notes
         }
-        
+    
     def _calculate_optimal_stops(
         self,
         remaining_laps: int,
         current_compound: str,
         tire_age: int,
-        previous_stops: List[int]
+        track_evolution: float,
+        safety_car_prob: float
     ) -> int:
-        """Calculate optimal number of remaining pit stops."""
+        """
+        Calculate the optimal number of remaining pit stops.
+        
+        This method uses a weighted scoring system considering:
+        1. Tire life vs remaining laps
+        2. Track evolution impact on lap times
+        3. Safety car probability
+        4. Compound-specific characteristics
+        
+        Args:
+            remaining_laps (int): Number of laps left in race
+            current_compound (str): Current tire compound
+            tire_age (int): Age of current tires
+            track_evolution (float): Rate of track improvement
+            safety_car_prob (float): Probability of safety car
+            
+        Returns:
+            int: Recommended number of stops
+        """
         # Base calculation from remaining laps
         base_stops = remaining_laps // 20  # Rough estimate: one stop every ~20 laps
         
@@ -850,42 +986,97 @@ class TrackStrategyOptimizer:
                 base_stops += 1
         
         # Adjust based on track characteristics
-        if self.track_characteristics.tire_degradation > 1.2:  # High degradation
+        if track_evolution > 0.012:  # High evolution
             base_stops += 1
-        elif self.track_characteristics.tire_degradation < 0.8:  # Low degradation
+        elif track_evolution < 0.008:  # Low evolution
             base_stops = max(0, base_stops - 1)
         
-        # Consider previous pit stop pattern
-        if previous_stops:
-            avg_stint_length = remaining_laps / (len(previous_stops) + 1)
-            remaining_stints = remaining_laps / avg_stint_length
-            base_stops = max(base_stops, int(remaining_stints))
+        # Adjust based on safety car probability
+        if safety_car_prob > 0.4:  # High safety car risk
+            base_stops += 1
+        elif safety_car_prob < 0.2:  # Low safety car risk
+            base_stops = max(0, base_stops - 1)
         
         return base_stops
     
-    def _calculate_stop_windows(
+    def _adjust_strategy_for_position(
         self,
-        current_lap: int,
         base_stops: int,
+        current_position: int,
+        traffic_impact: float,
+        overtaking_difficulty: float
+    ) -> int:
+        """
+        Adjust the strategy based on the current race position.
+        
+        This method considers:
+        1. Traffic impact on lap times
+        2. Overtaking difficulty
+        3. Current position
+        
+        Args:
+            base_stops (int): Base number of stops
+            current_position (int): Current position (1-20)
+            traffic_impact (float): Effect of traffic on lap times
+            overtaking_difficulty (float): How hard it is to pass
+            
+        Returns:
+            int: Adjusted number of stops
+        """
+        # Adjust based on traffic impact
+        if traffic_impact > 0.6:  # High traffic impact
+            base_stops += 1
+        elif traffic_impact < 0.4:  # Low traffic impact
+            base_stops = max(0, base_stops - 1)
+        
+        # Adjust based on overtaking difficulty
+        if overtaking_difficulty > 0.7:  # High overtaking difficulty
+            base_stops += 1
+        elif overtaking_difficulty < 0.5:  # Low overtaking difficulty
+            base_stops = max(0, base_stops - 1)
+        
+        # Adjust based on current position
+        if current_position > 10:  # Lower positions
+            base_stops += 1
+        elif current_position < 5:  # Higher positions
+            base_stops = max(0, base_stops - 1)
+        
+        return base_stops
+    
+    def _generate_pit_windows(
+        self,
         remaining_laps: int,
+        num_stops: int,
         current_compound: str,
         tire_age: int
     ) -> List[Dict]:
-        """Calculate optimal pit stop windows."""
-        if base_stops == 0:
-            return []
+        """
+        Generate pit windows for each remaining stop.
+        
+        This method considers:
+        1. Remaining laps
+        2. Number of stops
+        3. Current tire compound and age
+        
+        Args:
+            remaining_laps (int): Number of laps left in race
+            num_stops (int): Number of remaining stops
+            current_compound (str): Current tire compound
+            tire_age (int): Age of current tires
             
-        windows = []
-        remaining = remaining_laps
+        Returns:
+            List[Dict]: List of pit windows
+        """
+        pit_windows = []
         
         # Simple stint calculation - divide remaining laps evenly
-        stint_length = remaining // (base_stops + 1)
+        stint_length = remaining_laps // (num_stops + 1)
         
-        for stop in range(base_stops):
+        for stop in range(num_stops):
             # Calculate optimal lap - never pit in last 2 laps
             optimal_lap = min(
                 self.track_characteristics.race_laps - 2,
-                current_lap + stint_length
+                stint_length * (stop + 1)
             )
             
             # Simple window margin based on track type
@@ -894,25 +1085,42 @@ class TrackStrategyOptimizer:
             window = {
                 'stop_number': stop + 1,
                 'window': {
-                    'start': max(current_lap, optimal_lap - margin),
+                    'start': max(stint_length * stop, optimal_lap - margin),
                     'optimal': optimal_lap,
                     'end': min(
                         self.track_characteristics.race_laps - 2,
                         optimal_lap + margin
                     )
                 },
-                'compound': self._recommend_compound(stop, base_stops, remaining)
+                'compound': self._recommend_compound(stop, num_stops, remaining_laps)
             }
             
-            windows.append(window)
-            current_lap = optimal_lap
-            remaining = self.track_characteristics.race_laps - current_lap
-            stint_length = remaining // (base_stops - stop) if stop < base_stops - 1 else remaining
-            
-        return windows
+            pit_windows.append(window)
+        
+        return pit_windows
     
-    def _recommend_compound(self, stop: int, total_stops: int, remaining_laps: int) -> str:
-        """Recommend tire compound."""
+    def _recommend_compound(
+        self,
+        stop: int,
+        total_stops: int,
+        remaining_laps: int
+    ) -> str:
+        """
+        Recommend tire compound for the next stop.
+        
+        This method considers:
+        1. Remaining laps
+        2. Number of stops
+        3. Current stop number
+        
+        Args:
+            stop (int): Current stop number
+            total_stops (int): Total number of stops
+            remaining_laps (int): Number of laps left in race
+            
+        Returns:
+            str: Recommended tire compound
+        """
         # For last stint
         if stop == total_stops - 1:
             # Use softs for short final stints or street circuits
@@ -925,14 +1133,29 @@ class TrackStrategyOptimizer:
     
     def _generate_strategy_notes(
         self,
-        position: int,
-        current_lap: int,
-        current_compound: str,
-        tire_age: int,
-        pit_stops_made: int,
-        pit_stop_laps: List[int]
+        pit_windows: List[Dict],
+        current_position: int,
+        safety_car_prob: float,
+        track_evolution: float
     ) -> str:
-        """Generate strategy notes based on race situation."""
+        """
+        Generate strategy notes based on specific conditions.
+        
+        This method considers:
+        1. Pit windows
+        2. Current position
+        3. Safety car probability
+        4. Track evolution
+        
+        Args:
+            pit_windows (List[Dict]): List of pit windows
+            current_position (int): Current position (1-20)
+            safety_car_prob (float): Probability of safety car
+            track_evolution (float): Rate of track improvement
+            
+        Returns:
+            str: Strategy notes
+        """
         notes = []
         
         # Basic strategy points
@@ -947,13 +1170,18 @@ class TrackStrategyOptimizer:
             notes.append("Manage tires in high-load corners")
             
         # Safety car
-        if self.track_characteristics.safety_car_probability >= 0.4:
+        if safety_car_prob >= 0.4:
             notes.append("Keep gaps under 20s for safety car")
             
         return "\n".join(f"- {note}" for note in notes) if notes else ""
     
     def display_strategy(self, strategy: Dict) -> None:
-        """Display the recommended strategy."""
+        """
+        Display the recommended strategy.
+        
+        Args:
+            strategy (Dict): Strategy recommendation
+        """
         print("\nRecommended Strategy:")
         print("----------------------------------------")
         print(f"Current Tires: {strategy['current_compound'].title()} ({strategy['tire_age']} laps old)")
