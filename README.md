@@ -152,6 +152,69 @@ Key Strategy Points:
 - Keep gaps under 20s for safety car
 ```
 
+## Australian Grand Prix Strategy Optimizer
+
+### Track Characteristics
+- Length: 5.278 km
+- Race Laps: 58
+- Pit Loss Time: 21.5s
+- Track Evolution: 0.08 (good grip improvement)
+- Safety Car Probability: 35%
+- Traffic Impact: 0.6 (moderate)
+- Overtaking: Not difficult
+
+### Tire Compounds
+
+#### Soft Compound
+- Maximum life: 20 laps
+- Grip level: 1.0 (highest)
+- Degradation rate: 15%
+- Best used for: Qualifying, race starts, final stints
+- Critical age: >15 laps
+- Warning age: >10 laps
+
+#### Medium Compound
+- Maximum life: 30 laps
+- Grip level: 0.9 (balanced)
+- Degradation rate: 12%
+- Best used for: Mid-race stints, flexible strategy
+- Critical age: >25 laps
+- Warning age: >20 laps
+
+#### Hard Compound
+- Maximum life: 40 laps
+- Grip level: 0.8 (lowest)
+- Degradation rate: 10%
+- Best used for: Long stints, conservative strategy
+- Critical age: >35 laps
+- Warning age: >30 laps
+
+### Strategy Considerations
+- Track position less critical than street circuits
+- Good overtaking opportunities allow for aggressive tire strategies
+- Moderate tire wear with 1.0x degradation factor
+- Safety car probability (35%) warrants strategic flexibility
+- Track evolution improves grip for all compounds
+
+### Usage
+Run the interactive strategy optimizer:
+```bash
+python3 src/models/track_strategy.py
+```
+
+The optimizer will guide you through:
+1. Current race position and lap
+2. Tire compound and age
+3. Previous pit stops
+4. Strategy recommendations including:
+   - Optimal remaining pit stops
+   - Pit windows
+   - Compound-specific advice
+   - Track evolution notes
+   - Position-based strategy
+
+Type 'back' during pit stop entry to restart the sequence, or '2' to exit the program.
+
 ## Dependencies
 
 - Python 3.8+
