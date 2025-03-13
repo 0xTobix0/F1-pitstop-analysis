@@ -1,6 +1,18 @@
 """
-FastF1 data loader for F1 strategy optimization.
-Handles loading and processing of F1 telemetry and session data.
+FastF1 Data Integration Module
+
+This module handles the integration with FastF1 API for real-time F1 race data.
+It provides optimized data loading, caching, and processing for strategy calculations.
+
+Key Features:
+1. Real-time session data loading
+2. Weather and track condition analysis
+3. Tire performance calculations
+4. Track evolution modeling
+5. Efficient caching system
+
+The module is designed to work with the 2024 season data and key reference
+races from 2023 (Monaco, Monza, Spa) for historical analysis.
 """
 
 import fastf1
@@ -10,56 +22,67 @@ from typing import Dict, Optional, List, Tuple
 import logging
 from dataclasses import dataclass
 
-# Enable FastF1 cache
+# Enable FastF1 cache with optimized structure
+# Current season (2024) and key reference races (2023)
 fastf1.Cache.enable_cache('cache')
 
-# Track-specific configurations
+# Track-specific configurations and characteristics
 TRACK_INFO = {
     'monaco': {
-        'length': 3.337,
-        'laps': 78,
+        'length': 3.337,          # Track length in kilometers
+        'laps': 78,              # Standard race length
         'tire_deg_modifier': 0.8,  # 20% lower degradation due to slower speeds
-        'traffic_impact': 0.8,     # High traffic impact
-        'sc_probability': 0.4,     # Base safety car probability
-        'pit_window_margin': 2,    # Tighter pit windows (±2 laps)
-        'track_position_weight': 0.9,  # Very high importance of track position
-        'base_tire_deg': 0.03      # Base tire degradation rate
+        'traffic_impact': 0.8,     # High impact due to narrow track
+        'sc_probability': 0.4,     # Higher safety car probability
+        'pit_window_margin': 2,    # Narrow pit windows due to track nature
+        'track_position_weight': 0.9,  # Track position critical
+        'base_tire_deg': 0.03      # Base tire wear rate
     },
     'monza': {
         'length': 5.793,
         'laps': 53,
-        'tire_deg_modifier': 1.2,  # Higher deg due to high speeds
-        'traffic_impact': 0.3,
-        'sc_probability': 0.2,
-        'pit_window_margin': 4,
-        'track_position_weight': 0.4,
-        'base_tire_deg': 0.04
+        'tire_deg_modifier': 1.2,  # Higher wear from high speeds
+        'traffic_impact': 0.3,     # Low due to long straights
+        'sc_probability': 0.2,     # Lower due to run-off areas
+        'pit_window_margin': 4,    # Flexible due to overtaking opportunities
+        'track_position_weight': 0.4,  # Less critical
+        'base_tire_deg': 0.04      # Higher base wear
     },
     'spa': {
         'length': 7.004,
         'laps': 44,
-        'tire_deg_modifier': 1.1,
-        'traffic_impact': 0.4,
-        'sc_probability': 0.25,
-        'pit_window_margin': 4,
-        'track_position_weight': 0.5,
-        'base_tire_deg': 0.035
+        'tire_deg_modifier': 1.1,  # Moderate-high wear
+        'traffic_impact': 0.4,     # Moderate
+        'sc_probability': 0.25,    # Moderate
+        'pit_window_margin': 4,    # Standard
+        'track_position_weight': 0.5,  # Balanced
+        'base_tire_deg': 0.035     # Moderate wear
     },
     'australia': {
         'length': 5.278,
         'laps': 58,
-        'tire_deg_modifier': 1.0,
-        'traffic_impact': 0.5,
-        'sc_probability': 0.3,
-        'pit_window_margin': 3,
-        'track_position_weight': 0.6,
-        'base_tire_deg': 0.03
+        'tire_deg_modifier': 1.0,  # Standard wear
+        'traffic_impact': 0.5,     # Moderate
+        'sc_probability': 0.3,     # Moderate
+        'pit_window_margin': 3,    # Standard
+        'track_position_weight': 0.6,  # Moderately important
+        'base_tire_deg': 0.03      # Standard wear
     }
 }
 
 @dataclass
 class TireStintData:
-    """Data for a single tire stint."""
+    """
+    Data structure for analyzing individual tire stints.
+    
+    Attributes:
+        compound (str): Tire compound (soft/medium/hard/inter/wet)
+        start_lap (int): First lap of the stint
+        end_lap (int): Last lap of the stint
+        avg_lap_time (float): Average lap time during stint
+        degradation (float): Tire degradation rate
+        tire_life (float): Total life of tire in laps
+    """
     compound: str
     start_lap: int
     end_lap: int
@@ -68,24 +91,54 @@ class TireStintData:
     tire_life: float
 
 class FastF1DataLoader:
-    """Enhanced F1 data loader using FastF1 integration."""
+    """
+    Enhanced F1 data loader using FastF1 integration.
+    
+    This class handles:
+    1. Session data loading and caching
+    2. Weather condition analysis
+    3. Tire performance calculations
+    4. Track evolution modeling
+    5. Race distance and timing calculations
+    
+    The loader maintains an optimized cache structure:
+    - 2024 season: All races
+    - 2023 season: Key reference races
+    - Historical data: Archived in cache_backup/
+    """
     
     def __init__(self):
-        """Initialize the data loader."""
+        """Initialize the data loader with empty session state."""
         self.session = None
         self.track_name = None
         self.track_info = None
     
     def load_session(self, year: int, track_name: str, session_type: str = 'R') -> Dict:
-        """Load session data for a specific race.
+        """
+        Load and process F1 session data.
+        
+        This method:
+        1. Loads session data from FastF1
+        2. Processes weather conditions
+        3. Analyzes tire performance
+        4. Calculates track evolution
+        5. Determines race characteristics
         
         Args:
-            year: Season year
-            track_name: Name of the track (lowercase)
-            session_type: Session type (R for Race, Q for Qualifying)
+            year (int): Season year (primarily 2024, some 2023)
+            track_name (str): Name of the track (lowercase)
+            session_type (str): Session type (R=Race, Q=Qualifying)
             
         Returns:
-            Dictionary containing processed session data
+            Dict: Processed session data including:
+                - weather: Current and predicted conditions
+                - tire_performance: Compound-specific analysis
+                - track_evolution: Grip improvement rate
+                - race_distance: Total race distance
+                - track_length: Circuit length
+                
+        Raises:
+            Exception: If session data cannot be loaded
         """
         try:
             self.track_name = track_name.lower()
@@ -103,7 +156,7 @@ class FastF1DataLoader:
             self.session = fastf1.get_session(year, track_name, session_type)
             self.session.load()
             
-            # Get race distance
+            # Calculate total race distance
             race_distance = self.track_info['length'] * self.track_info['laps']
             
             return {
@@ -119,7 +172,26 @@ class FastF1DataLoader:
             raise
     
     def _get_weather_data(self) -> Dict:
-        """Get detailed weather data including track conditions."""
+        """
+        Analyze and process weather conditions.
+        
+        This method calculates:
+        1. Track and air temperatures
+        2. Weather stability metrics
+        3. Safety car probability adjustments
+        4. Rain impact on strategy
+        
+        Returns:
+            Dict: Weather analysis including:
+                - condition: Current track condition (wet/dry)
+                - track_temp: Average track temperature
+                - air_temp: Average air temperature
+                - humidity: Average humidity
+                - rainfall: Presence of rain
+                - wind_speed: Average wind speed
+                - weather_stability: Track condition stability
+                - safety_car_probability: Adjusted SC probability
+        """
         try:
             weather = self.session.weather_data
             
@@ -166,7 +238,30 @@ class FastF1DataLoader:
             }
     
     def _get_tire_performance(self) -> Dict:
-        """Get comprehensive tire performance analysis."""
+        """
+        Analyze tire performance and degradation.
+        
+        This method calculates:
+        1. Compound-specific degradation rates
+        2. Average and fastest lap times
+        3. Tire life expectations
+        4. Stint performance patterns
+        
+        The analysis considers:
+        - Track-specific wear characteristics
+        - Temperature impact on compounds
+        - Historical performance data
+        - Real-time degradation patterns
+        
+        Returns:
+            Dict: Tire performance data by compound:
+                - avg_lap_time: Mean lap time on compound
+                - fastest_lap: Best lap time achieved
+                - avg_tire_life: Expected tire life
+                - degradation: Wear rate per lap
+                - stint_count: Number of stints
+                - total_laps: Laps completed
+        """
         try:
             compounds = self.session.laps['Compound'].unique()
             compound_performance = {}
@@ -248,7 +343,18 @@ class FastF1DataLoader:
             }
     
     def _analyze_stints(self) -> List[TireStintData]:
-        """Analyze individual tire stints."""
+        """
+        Analyze individual tire stints.
+        
+        This method calculates:
+        1. Stint duration
+        2. Average lap time
+        3. Tire degradation
+        4. Tire life
+        
+        Returns:
+            List[TireStintData]: List of analyzed stints
+        """
         stints = []
         
         try:
@@ -289,7 +395,16 @@ class FastF1DataLoader:
         return stints
     
     def _calculate_track_evolution(self) -> float:
-        """Calculate track evolution rate."""
+        """
+        Calculate track evolution rate.
+        
+        This method calculates:
+        1. Lap time improvement rate
+        2. Grip improvement rate
+        
+        Returns:
+            float: Track evolution rate
+        """
         try:
             # Get lap times for each sector
             lap_times = self.session.laps['LapTime'].dt.total_seconds()
